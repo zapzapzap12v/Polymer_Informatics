@@ -1,0 +1,27 @@
+version: '3.9'
+
+services:
+  # Container 1: Data Processing & ML Training (Python-only)
+  ml-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml
+    volumes:
+      - ./data:/app/data
+      - ./results:/app/results
+      - ./logs:/app/logs
+    environment:
+      - CONFIG_FILE=/app/config/production_config.yaml
+      - LOG_LEVEL=INFO
+    command: python main.py --mode=ml
+  
+  # Container 2: Ansys Simulation (Optional - runs separately)
+  # Note: Ansys requires Windows or specific Linux setup with license server
+  # Typically runs on dedicated HPC cluster, not in Docker
+  # If needed, can use pre-built Ansys container:
+  # ansys-simulation:
+  #   image: ansys/ansys:2024
+  #   volumes:
+  #     - ./data/simulations:/simulations
+  #   environment:
+  #     - ANSYS_LICENSE_SERVER=ansyslicense.company.com:1055
