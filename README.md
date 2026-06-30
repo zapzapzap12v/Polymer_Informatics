@@ -10,6 +10,50 @@ Automated simulation and ML pipeline for polymer capacitance prediction.
 - 4GB RAM minimum
 - Git
 
+## Important: Ansys Student Edition Limitations ⚠️
+
+If using Ansys Student Edition, be aware of these critical limitations:
+
+### Hardware/Software Limits
+- **Maximum model size**: 32,000 nodes per simulation
+- **Maximum iterations**: 10,000
+- **Parallel processing**: ❌ NOT SUPPORTED (single-threaded only)
+- **License duration**: Expires after 12 months
+
+### Software/Commercial Limits
+- **Usage**: Educational only (non-commercial)
+- **Publications**: Cannot publish research results
+- **Commercial deployment**: ❌ NOT PERMITTED
+- **Support**: Limited to university email addresses
+
+### Pipeline Implications
+```text
+Your Setup: Ansys Student Edition
+├─ max_parallel_jobs: MUST be 1 (not 4)
+├─ Processing time: 4-8x slower than commercial
+├─ Dataset size limit: ~200-500 samples (before exceeding node limit)
+└─ Recommendation: Upgrade to commercial for production
+```
+
+### Checking Your Ansys Version
+```bash
+# Check if Student Edition
+ansys2024 --version | grep -i student
+
+# Recommended upgrade path
+# 1. Academic: Use university license
+# 2. Research: Apply for student research extension
+# 3. Commercial: Purchase full license
+```
+
+### For Production Deployment
+⚠️ **You CANNOT deploy this pipeline commercially with Student Ansys**
+
+Options:
+1. Upgrade to Commercial Ansys
+2. Use institutional Ansys license
+3. Deploy ML pipeline only (without simulation)
+
 ### Installation
 
 #### Option 1: Local Development Setup
@@ -397,38 +441,58 @@ Target: Process 5000 samples/second
 - [ ] Docker image builds: `docker build -t polymer_informatics:latest .`
 - [ ] Docker image runs: `docker run --rm polymer_informatics:latest --help`
 - [ ] Integration test passes: `pytest tests/integration_tests/`
+- [ ] ⚠️ **CRITICAL - Ansys License Check:**
+  - [ ] Confirm Ansys edition: Commercial or Student?
+  - [ ] If Student: Confirm non-commercial use only
+  - [ ] If Commercial: Document license agreement
+  - [ ] Test max_parallel_jobs setting
+  - [ ] Verify node limit won't be exceeded
 - [ ] Configuration validated: `python config/config_manager.py`
 - [ ] Reproducibility confirmed: seed test passes
 - [ ] Documentation updated: `CHANGELOG.md` reflects changes
 - [ ] Version bumped: `setup.py` has new version
 
+### Ansys Student Edition Deployment Restrictions
+⚠️ **CANNOT DEPLOY IF:**
+- Using Student Ansys for commercial purposes
+- Expecting to process >500 samples (risk of exceeding 32K node limit)
+- Requiring parallel processing (max_parallel_jobs > 1)
+- Planning to publish results commercially
+
+✅ **CAN DEPLOY IF:**
+- Using commercial Ansys license
+- Using Student Ansys for educational/internal research only
+- Have upgraded to full license
+- Using ML pipeline only (no simulation)
+
+### Ansys Commercial License Pre-Requisites
+- [ ] Valid commercial Ansys license file/server configured
+- [ ] License server reachable: `telnet $ANSYS_LICENSE_SERVER $ANSYS_LICENSE_PORT`
+- [ ] Multiple parallel jobs tested successfully
+- [ ] Large geometry processing tested (verify node count)
+
 ### Deployment Steps
 
 ```bash
-# 1. Create release tag
-git tag -a v1.0.0 -m "Release version 1.0.0"
-git push origin v1.0.0
+# 1. Verify configuration
+python -c "from codes.ansys_license_validator import AnsysLicenseValidator; \
+           from codes.config_manager import ConfigurationLoader; \
+           config = ConfigurationLoader.load_configuration(); \
+           valid, msg = AnsysLicenseValidator.enforce_student_limits(config); \
+           print(msg)"
 
-# 2. Build and test Docker image
-docker build -t polymer_informatics:1.0.0 .
-docker test polymer_informatics:1.0.0
+# 2. Run integration tests
+python tests/run_integration_test.py
 
-# 3. Push to registry (if using Docker Hub/ECR)
-docker push myregistry/polymer_informatics:1.0.0
+# 3. Build Docker image (for ML pipeline)
+docker build -t polymer_informatics:production .
 
-# 4. Deploy to production environment
-# Using Docker:
+# 4. Deploy
 docker run -d \
   --name polymer_informatics \
   -v /data:/app/data \
   -v /results:/app/results \
-  polymer_informatics:1.0.0
-
-# Using Kubernetes:
-kubectl apply -f k8s/deployment.yaml
-
-# Using Docker Compose:
-docker-compose up -d
+  polymer_informatics:production
 ```
 
 ### Post-Deployment

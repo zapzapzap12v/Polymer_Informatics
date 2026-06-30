@@ -73,9 +73,10 @@ jobs:
           pip install pytest pytest-cov pytest-xdist
           pip install -r requirements.txt
       
-      - name: Run unit tests with coverage
+      - name: Run unit tests with coverage (excluding Ansys tests)
         run: |
           pytest tests/test_*.py \
+            -k "not ansys and not simulation" \
             -v \
             --cov=. \
             --cov-report=xml \

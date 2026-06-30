@@ -1,4 +1,24 @@
 # Dockerfile.ml - Multi-stage build
+# ============================================================================
+# IMPORTANT: Ansys Handling
+# ============================================================================
+# This Docker image is for the ML pipeline ONLY (data processing, training)
+#
+# Ansys simulation runs OUTSIDE the container because:
+# 1. Ansys requires system license (cannot containerize)
+# 2. Ansys is Windows/Linux specific (container is generic)
+# 3. Ansys output is mounted as volume
+#
+# Workflow:
+# 1. Run Ansys simulations on host/HPC cluster
+# 2. Output files saved to ./data/simulations/
+# 3. Docker container processes results
+#
+# For Student Ansys Edition:
+# - Max 32,000 nodes per simulation
+# - Single-threaded only
+# - See README.md for deployment restrictions
+# ============================================================================
 # Stage 1: Builder
 FROM python:3.10-slim as builder
 
