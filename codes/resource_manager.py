@@ -7,7 +7,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 @contextmanager
-def managed_temp_directory(temp_dir: str):
+def managed_temp_directory(temp_dir: str, verify_cleanup: bool = True):
     """
     Context manager that ensures a temporary directory is created before yielding
     and cleaned up (deleted) upon exit, regardless of success or failure.
@@ -19,8 +19,15 @@ def managed_temp_directory(temp_dir: str):
         yield str(path)
     finally:
         if path.exists():
-            shutil.rmtree(path, ignore_errors=True)
-            logger.info(f"Cleaned up temporary directory: {path}")
+            try:
+                shutil.rmtree(path)
+                logger.info(f"Cleaned up temporary directory: {path}")
+                if verify_cleanup and path.exists():
+                    raise RuntimeError(f"Failed to cleanup {path} - directory still exists")
+            except Exception as e:
+                logger.error(f"Error during cleanup of {path}: {e}")
+                if verify_cleanup:
+                    raise
 
 @contextmanager
 def managed_ansys_job(m2d_instance):

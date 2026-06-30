@@ -2,6 +2,11 @@ import os
 import sys
 import json
 import logging
+import subprocess
+try:
+    import yaml
+except ImportError:
+    yaml = None
 from typing import Dict, Optional, List
 from pathlib import Path
 
@@ -22,12 +27,27 @@ class AnsysPathResolver:
     ]
     
     @classmethod
+    def _verify_executable(cls, path: str) -> bool:
+        """Verify path is actually executable."""
+        path_obj = Path(path)
+        
+        if not path_obj.exists():
+            return False
+            
+        if not os.access(path_obj, os.X_OK):
+            logger.warning(f"Path exists but is not executable: {path}")
+            return False
+            
+        return True
+
+    @classmethod
     def resolve_ansys_path(cls, version: str = None) -> Optional[str]:
         """Find Ansys executable using multiple strategies."""
         
         # Strategy 1: Explicit environment variable
         explicit_path = os.getenv('ANSYS_EXECUTABLE')
-        if explicit_path and Path(explicit_path).exists():
+        if explicit_path and cls._verify_executable(explicit_path):
+            logger.info(f"Found Ansys via ANSYS_EXECUTABLE: {explicit_path}")
             return explicit_path
         
         # Strategy 2: Standard paths
@@ -36,12 +56,12 @@ class AnsysPathResolver:
         for path_template in platform_paths:
             if version:
                 path = path_template.format(version=version)
-                if Path(path).exists():
+                if cls._verify_executable(path):
                     return path
             else:
                 for v in ['2025', '2024', '2023', '2022']:
                     candidate = path_template.format(version=v)
-                    if Path(candidate).exists():
+                    if cls._verify_executable(candidate):
                         return candidate
         
         # Strategy 3: Check PATH
@@ -57,6 +77,33 @@ class AnsysPathResolver:
 class ConfigurationLoader:
     """Load and validate configuration from multiple sources."""
     
+    @classmethod
+    def load_from_file(cls, config_path: str) -> Dict:
+        """Load configuration from YAML or JSON file."""
+        config_path = Path(config_path)
+        
+        if not config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+        
+        try:
+            with open(config_path, 'r') as f:
+                if config_path.suffix in ['.yaml', '.yml']:
+                    if yaml is None:
+                        raise ImportError("PyYAML is not installed.")
+                    config_dict = yaml.safe_load(f)
+                elif config_path.suffix == '.json':
+                    config_dict = json.load(f)
+                else:
+                    raise ValueError(f"Unsupported config format: {config_path.suffix}")
+        except Exception as e:
+            if yaml and isinstance(e, yaml.YAMLError):
+                raise ValueError(f"Invalid YAML in {config_path}: {e}")
+            elif isinstance(e, json.JSONDecodeError):
+                raise ValueError(f"Invalid JSON in {config_path}: {e}")
+            raise e
+            
+        return config_dict
+
     @classmethod
     def load_configuration(cls) -> Dict:
         """Load configuration from environment variables."""

@@ -1,18 +1,45 @@
 import pandas as pd
 import numpy as np
 import logging
-from typing import Tuple
+from typing import Tuple, Dict
+
 
 logger = logging.getLogger(__name__)
 
-def validate_data_integrity(df: pd.DataFrame, drop_nulls: bool = True, null_threshold: float = 0.05) -> Tuple[bool, pd.DataFrame]:
+def _is_type_compatible(actual: np.dtype, expected: type) -> bool:
+    """Check if actual type matches expected."""
+    type_mapping = {
+        float: [np.float64, np.float32, np.float16],
+        int: [np.int64, np.int32, np.int16],
+        str: [np.object_, 'object'],
+        bool: [np.bool_],
+    }
+    return actual in type_mapping.get(expected, [])
+
+def validate_data_integrity(df: pd.DataFrame, drop_nulls: bool = True, null_threshold: float = 0.05, schema: Dict[str, type] = None) -> Tuple[bool, pd.DataFrame]:
     """
-    Validates a DataFrame for nulls and infinite values.
+    Validates a DataFrame for nulls, infinite values, and optional type schema.
     Returns (is_valid, cleaned_df).
     """
     if df.empty:
         logger.warning("DataFrame is empty.")
         return False, df
+
+    if schema:
+        type_issues = False
+        for col, expected_type in schema.items():
+            if col not in df.columns:
+                logger.warning(f"Missing column: {col}")
+                type_issues = True
+                continue
+            
+            actual_type = df[col].dtype
+            if not _is_type_compatible(actual_type, expected_type):
+                logger.warning(f"Type mismatch in {col}: expected {expected_type}, got {actual_type}")
+                type_issues = True
+        
+        if type_issues:
+            logger.warning("Type validation failed.")
 
     # Check for infinite values
     inf_cols = df.columns.to_series()[np.isinf(df.select_dtypes(include=[np.number])).any()]

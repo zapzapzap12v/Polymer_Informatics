@@ -3,6 +3,49 @@ import os
 import pandas as pd
 from typing import Dict, Any, Tuple
 from simulation_diagnostics import FailureClassifier
+import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
+
+class PhysicsValidatedRetryStrategy:
+    """Ensure retry strategies are physics-sound."""
+    
+    MESH_REFINEMENT_BOUNDS = {
+        'min_element_size': 1e-6,
+        'max_element_size': 1e-2,
+    }
+    
+    SOLVER_PARAMETER_BOUNDS = {
+        'voltage': (0.1, 1000),
+        'thickness_nm': (10, 100000)
+    }
+    
+    @staticmethod
+    def validate_remesh_strategy(params: Dict, attempt: int) -> Dict:
+        """Ensure mesh refinement doesn't violate physics constraints."""
+        current_size = params.get('mesh_size_factor', 1.0)
+        min_size = PhysicsValidatedRetryStrategy.MESH_REFINEMENT_BOUNDS['min_element_size']
+        
+        refined_size = current_size * (0.8 ** attempt)
+        
+        if refined_size < min_size:
+            logger.warning(f"Mesh refinement would exceed limit. Clamping at {min_size}")
+            refined_size = min_size
+            
+        params['mesh_size_factor'] = refined_size
+        return params
+
+    @staticmethod
+    def validate_solver_strategy(params: Dict, attempt: int) -> Dict:
+        """Ensure solver adjustments stay within bounds."""
+        for param, (min_val, max_val) in PhysicsValidatedRetryStrategy.SOLVER_PARAMETER_BOUNDS.items():
+            if param in params:
+                current = params[param]
+                if current < min_val or current > max_val:
+                    params[param] = np.clip(current, min_val, max_val)
+                    logger.warning(f"Parameter {param}={current} out of bounds [{min_val}, {max_val}]. Clamped.")
+        return params
 
 class EnhancedSimulationManager:
     """Manages adaptive retry logic for ANSYS simulations based on diagnosed failure modes."""
@@ -42,23 +85,26 @@ class EnhancedSimulationManager:
 
     def _remesh_adaptive(self, params: Dict[str, Any], attempt: int) -> Dict[str, Any]:
         """Adaptively reduce mesh size or adjust thickness backoff."""
-        # E.g. standard backoff logic but enhanced
         thickness = params.get('thickness_nm', 1000)
         backoff_factor = params.get('backoff_factor', 0.1) * (1.2 ** attempt)
         params['thickness_nm'] = thickness + (thickness * backoff_factor)
-        # In a real environment we would also adjust ansys mesh params directly
+        
+        # Apply physics bounds validation
+        params = PhysicsValidatedRetryStrategy.validate_remesh_strategy(params, attempt)
+        params = PhysicsValidatedRetryStrategy.validate_solver_strategy(params, attempt)
         return params
 
     def _adjust_solver_params(self, params: Dict[str, Any], attempt: int) -> Dict[str, Any]:
         """Adjust solver settings for stability."""
         params['voltage'] = params.get('voltage', 100) * 0.9 # Reduce stress
+        params = PhysicsValidatedRetryStrategy.validate_solver_strategy(params, attempt)
         return params
 
     def _validate_geometry(self, params: Dict[str, Any], attempt: int) -> Dict[str, Any]:
         """Validate and repair geometry before retry."""
-        # Implement gap filling / tolerance
         thickness = params.get('thickness_nm', 1000)
         params['thickness_nm'] = thickness * 1.1 # Thicker layer might heal geometry
+        params = PhysicsValidatedRetryStrategy.validate_solver_strategy(params, attempt)
         return params
 
     def _refine_mesh_locally(self, params: Dict[str, Any], attempt: int) -> Dict[str, Any]:
