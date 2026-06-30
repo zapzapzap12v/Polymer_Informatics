@@ -5,6 +5,7 @@ Phase 2 Extended — includes model tuning, ensemble, and class inference config
 import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
+from config_manager import pipeline_config
 
 # Dynamic Architecture Constraints
 NUM_SAMPLES = 1440
@@ -18,7 +19,7 @@ TEMP_BOUNDS = (100, 300)
 CRYST_BOUNDS = (0.10, 0.90)
 
 TARGET_TG_NOISE = 12.0
-RANDOM_SEED = 42
+RANDOM_SEED = pipeline_config['simulation']['random_seed']
 
 # ─── Phase A: MLP Hyperparameter Tuning ─────────────────────────────────────
 # Deeper architecture + adaptive LR to fix the convergence warning (max_iter=200)
@@ -61,8 +62,8 @@ DATASET_PATH  = "ready_polymer_dataset.csv"
 GOOD_FIT_THRESHOLD = 450.0                       # MV/m cutoff from code_9
 
 # ─── ANSYS FEA Parameters ─────────────────────────────────────────────────────
-ANSYS_CORE_COUNT = 4
-ANSYS_MESH_RESOLUTION = "Standard"
+ANSYS_CORE_COUNT = pipeline_config['ansys']['core_count']
+ANSYS_MESH_RESOLUTION = pipeline_config['ansys']['mesh_resolution']
 ANSYS_SESSION_RESTART_INTERVAL = 50
 
 # ─── Phase B: ANSYS Ensemble Hyperparameters ──────────────────────────────────

@@ -41,6 +41,7 @@ except ImportError:
     print("⚠️  XGBoost not found. Running 2-way ensemble (MLP + GBR).")
 
 import config
+from dataset_composition_manager import DatasetCompositionManager, CrossValidationByMaterialClass
 
 ANSYS_DATA_PATH  = "../results/ansys_simulation_results.csv"
 ANSYS_MODEL_PATH = "../files/ansys_ensemble_pipeline.pkl"
@@ -272,10 +273,21 @@ def main():
     print(f"      Morgan bits: {len(morgan_cols)} | Physical features: {len(physical_cols)}")
 
     # --- Train/Test Split ---
-    print("\n[3/7] Splitting Train/Test (80/20)...")
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.20, random_state=config.RANDOM_SEED
-    )
+    print("\n[3/7] Splitting Train/Test (80/20) with Stratification...")
+    manager = DatasetCompositionManager()
+    
+    # Generate composition report for analysis
+    manager.generate_composition_report(df, '../results/dataset_composition.txt')
+    
+    # Split using manager
+    train_df, test_df = manager.split_by_material_class(df, test_size=0.20)
+    
+    # Apply indices to X and y
+    X_train = X.loc[train_df.index]
+    X_test = X.loc[test_df.index]
+    y_train = y.loc[train_df.index]
+    y_test = y.loc[test_df.index]
+
     print(f"      Train: {len(X_train)} | Test: {len(X_test)}")
 
     # --- Build Pipelines ---
@@ -317,10 +329,20 @@ def main():
     joblib.dump(ensemble, ANSYS_MODEL_PATH)
     print(f"\n      Model saved -> {ANSYS_MODEL_PATH}")
 
-    # --- Plots ---
-    print("\n[7/7] Generating evaluation plots...")
+    # --- Plots & Cross-Class Validation ---
+    print("\n[7/7] Generating evaluation plots and cross-class validation...")
     generate_plots(y_test, y_pred_ens, y_pred_mlp, mlp_pipeline)
     generate_confusion_matrix(y_test, y_pred_ens)
+    
+    cv_metrics = CrossValidationByMaterialClass.evaluate_per_material_class(test_df, y_test, y_pred_ens)
+    with open('../results/cross_class_validation.txt', 'w') as f:
+        f.write("CROSS-MATERIAL-CLASS VALIDATION REPORT\n")
+        f.write("=" * 80 + "\n\n")
+        for mat_class, metrics in cv_metrics.items():
+            f.write(f"{mat_class:<25} {metrics['sample_count']:>10} "
+                    f"{metrics['r2_score']:>12.3f} {metrics['mae']:>12.3f} "
+                    f"{metrics['rmse']:>12.3f}\n")
+    print("      Cross-class validation saved: cross_class_validation.txt")
 
     # --- Summary ---
     print("\n" + "=" * 60)

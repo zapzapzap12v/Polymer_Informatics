@@ -5,11 +5,12 @@ import time
 from ansys.aedt.core import Desktop, Maxwell2d
 from ansys.aedt.core.modules.boundary.maxwell_boundary import MatrixElectric
 import config
+from adaptive_retry_manager import EnhancedSimulationManager
 
 # --- 1. CONFIGURATION ---
 INPUT_FILE  = "../results/ansys_sweep_targets.csv"
 OUTPUT_FILE = "../results/ansys_simulation_results.csv"
-ANSYS_VERSION = "2025.2"
+ANSYS_VERSION = config.pipeline_config['ansys']['version'] if hasattr(config, 'pipeline_config') else "2025.2"
 SAMPLES_PER_SESSION = config.ANSYS_SESSION_RESTART_INTERVAL
 MAX_MESH_RETRIES = 3          # 5.5: Max retries per sample before logging as failed
 THICKNESS_BACKOFF_FACTOR = 0.1  # 5.5: Back off by 10% of thickness on each retry
@@ -87,30 +88,36 @@ def run_simulation_sweep():
                 # ── 5.5 Adaptive Mesh Retry Loop ──────────────────────────
                 cap    = 0.0
                 status = "Failed"
-                thickness_try = row["thickness_nm"]
+                
+                sim_manager = EnhancedSimulationManager()
+                params = {
+                    'thickness_nm': row["thickness_nm"],
+                    'backoff_factor': THICKNESS_BACKOFF_FACTOR,
+                    'voltage': row['applied_voltage']
+                }
 
                 for attempt in range(1, MAX_MESH_RETRIES + 1):
                     try:
-                        cap    = run_single_sample(m2d, row, thickness_override_nm=thickness_try)
+                        cap = run_single_sample(m2d, row, thickness_override_nm=params['thickness_nm'])
                         status = "Success" if cap > 0 else "Failed"
                         if cap > 0:
                             break
-                    except Exception as mesh_err:
-                        backoff_nm = thickness_try * THICKNESS_BACKOFF_FACTOR
-                        thickness_try += backoff_nm
-                        if attempt < MAX_MESH_RETRIES:
-                            print(f"\n  [Retry {attempt}/{MAX_MESH_RETRIES}] Mesh singularity at "
-                                  f"{thickness_try - backoff_nm:.0f} nm. "
-                                  f"Backing off to {thickness_try:.0f} nm...")
+                    except Exception as err:
+                        should_retry, new_params, failure_mode = sim_manager.diagnose_and_adapt(err, params, attempt, MAX_MESH_RETRIES)
+                        if should_retry:
+                            print(f"\n  [Retry {attempt}/{MAX_MESH_RETRIES}] Error diagnosed as {failure_mode}.")
+                            print(f"  Backing off thickness from {params['thickness_nm']:.0f} nm to {new_params['thickness_nm']:.0f} nm...")
+                            params = new_params
                         else:
-                            print(f"\n  [FAILED] Sample {i} exhausted {MAX_MESH_RETRIES} "
-                                  f"retries: {str(mesh_err)[:60]}")
+                            print(f"\n  [FAILED] Sample {i} exhausted {MAX_MESH_RETRIES} retries. Final mode: {failure_mode}")
                             status = "Failed Extraction"
+                
+                sim_manager.save_failure_report()
 
                 row_res = row.to_dict()
                 row_res["sim_capacitance_F"] = cap
                 row_res["sim_status"]        = status
-                row_res["final_thickness_nm"] = thickness_try
+                row_res["final_thickness_nm"] = params['thickness_nm']
                 results.append(row_res)
 
                 print(f"[{i+1}/{total_samples}] {smiles[:20]}... -> {cap:.2f} pF/m [{status}]",
