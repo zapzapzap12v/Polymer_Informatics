@@ -1,12 +1,17 @@
 import numpy as np
 import pandas as pd
+from data_validation import validate_data_integrity
+from reproducibility import DeterministicPipeline
+from config_manager import pipeline_config
 
 def generate_strict_dataset(num_samples=7200):
+    """
     """
     Generates a physically sound dataset of 7,200 samples for high-temperature polymer alloys.
     All data is generated mathematically based on material bounds to avoid dummy data.
     """
-    np.random.seed(42)
+    seed = pipeline_config['simulation']['random_seed']
+    DeterministicPipeline.set_random_seed(seed)
     
     # Material Categories
     material_types = np.random.choice(['Polymer_Blend', 'Alloy', 'Nanocomposite'], size=num_samples, p=[0.5, 0.3, 0.2])
@@ -44,6 +49,14 @@ def generate_strict_dataset(num_samples=7200):
 if __name__ == "__main__":
     print("Generating strictly parameterized dataset for 7,200 samples...")
     dataset = generate_strict_dataset(7200)
+    
+    # Validate integrity
+    is_valid, dataset = validate_data_integrity(dataset)
+    if not is_valid:
+        print("Warning: Dataset validation failed or required heavy null dropping.")
+        
+    import os
+    os.makedirs('../results', exist_ok=True)
     output_path = '../results/ansys_target_dataset_7200.csv'
     dataset.to_csv(output_path, index=False)
     print(f"Dataset with {len(dataset)} verified samples successfully generated and saved to {output_path}.")

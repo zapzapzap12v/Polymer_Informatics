@@ -42,6 +42,7 @@ except ImportError:
 
 import config
 from dataset_composition_manager import DatasetCompositionManager, CrossValidationByMaterialClass
+from reproducibility import DeterministicPipeline
 
 ANSYS_DATA_PATH  = "../results/ansys_simulation_results.csv"
 ANSYS_MODEL_PATH = "../files/ansys_ensemble_pipeline.pkl"
@@ -247,6 +248,7 @@ def generate_confusion_matrix(y_test, y_pred_ens):
 
 # ─── 6. Main ──────────────────────────────────────────────────────────────────
 def main():
+    DeterministicPipeline.set_random_seed(config.RANDOM_SEED)
     print("=" * 60)
     print("  Phase B — ANSYS-Integrated ML Training (code_13)")
     print("=" * 60)
