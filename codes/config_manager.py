@@ -9,8 +9,13 @@ except ImportError:
     yaml = None
 from typing import Dict, Optional, List
 from pathlib import Path
+from logger_setup import PipelineLogger
+try:
+    from input_validation import InputValidator
+except ImportError:
+    InputValidator = None
 
-logger = logging.getLogger(__name__)
+logger = PipelineLogger.get_logger(__name__)
 
 class AnsysPathResolver:
     """Dynamically locate Ansys installation across platforms."""
@@ -130,6 +135,13 @@ class ConfigurationLoader:
             }
         }
         
+        # Validate Ansys config if validator is available
+        if InputValidator is not None:
+            is_valid, errors = InputValidator.validate_ansys_config(config['ansys'])
+            if not is_valid:
+                logger.error(f"Invalid Ansys configuration: {errors}")
+                # We could raise an error here, but for now we just log it
+                
         return config
 
 # Global config instance

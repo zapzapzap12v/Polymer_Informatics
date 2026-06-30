@@ -4,8 +4,7 @@ from data_validation import validate_data_integrity
 from reproducibility import DeterministicPipeline
 from config_manager import pipeline_config
 
-def generate_strict_dataset(num_samples=7200):
-    """
+def generate_strict_dataset(num_samples: int = 7200) -> pd.DataFrame:
     """
     Generates a physically sound dataset of 7,200 samples for high-temperature polymer alloys.
     All data is generated mathematically based on material bounds to avoid dummy data.

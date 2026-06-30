@@ -5,21 +5,26 @@ import pandas as pd
 from resource_manager import managed_ansys_job
 from iteration_utils import safe_iterate_dataframe
 from numerical_stability import NumericallyStableCalculator
+from logger_setup import PipelineLogger
+from input_validation import InputValidator
 
-def run_ansys_batch_simulation(dataset_path):
+logger = PipelineLogger.get_logger(__name__)
+
+def run_ansys_batch_simulation(dataset_path: str) -> None:
     """
     Simulates the physical properties of the generated polymer/alloy dataset using ANSYS PyMAPDL.
     """
-    if not os.path.exists(dataset_path):
-        raise FileNotFoundError(f"Dataset {dataset_path} not found.")
+    if not InputValidator.validate_file_path(dataset_path, expected_ext='.csv'):
+        logger.error(f"Invalid dataset path: {dataset_path}")
+        raise FileNotFoundError(f"Dataset {dataset_path} not found or invalid.")
         
     df = pd.read_csv(dataset_path)
-    print(f"Loaded {len(df)} samples for ANSYS batch simulation.")
+    logger.info(f"Loaded {len(df)} samples for ANSYS batch simulation.")
     
     # Placeholder for MAPDL launch
     class MockMapdl:
         def exit(self):
-            print("Mapdl exited safely.")
+            logger.info("Mapdl exited safely.")
             
     mapdl = MockMapdl()
     
@@ -63,15 +68,15 @@ def run_ansys_batch_simulation(dataset_path):
                 leakage = (100 / thickness) * df_factor * 1e-9
                 simulated_leakage_current.append(leakage * (1 + 0.05 * np.random.randn()))
                 
-                print(f"Sample {idx} solved: C={simulated_capacitance[-1]:.4e} F")
+                logger.info(f"Sample {idx} solved: C={simulated_capacitance[-1]:.4e} F")
                 
             except Exception as e:
-                print(f"Simulation failed for sample {idx}: {e}")
+                logger.error(f"Simulation failed for sample {idx}: {e}")
                 simulated_capacitance.append(None)
                 simulated_leakage_current.append(None)
             
     # In a full run, we would append the simulated columns back to the dataframe
-    print("ANSYS batch simulation completed.")
+    logger.info("ANSYS batch simulation completed.")
     
 if __name__ == "__main__":
     import numpy as np # for the mock random noise
