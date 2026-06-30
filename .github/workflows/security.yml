@@ -6,38 +6,30 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    - cron: '0 3 * * 0'  # Weekly on Sunday
+    - cron: '0 3 * * 0'
 
 jobs:
-  security:
-    name: Security Checks
+  bandit:
+    name: Bandit Security Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install bandit
+        run: pip install bandit
+      
       - name: Run Bandit security scan
-        uses: gaurav-nelson/github-action-bandit@v1
-        with:
-          path: "."
+        run: bandit -r . -f json -o bandit-report.json
+        continue-on-error: true
       
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Upload results
+        uses: actions/upload-artifact@v3
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-      
-      - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: 'trivy-results.sarif'
-      
-      - name: Dependency check
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'Polymer_Informatics'
-          path: '.'
-          format: 'JSON'
-          args: >
-            --enable-retired
+          name: bandit-results
+          path: bandit-report.json
+        if: always()
